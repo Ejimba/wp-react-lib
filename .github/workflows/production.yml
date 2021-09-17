@@ -1,0 +1,103 @@
+name: ci
+
+on:
+  push:
+    branches: main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CI: false
+      REACT_APP_TITLE: "WP React Lib"
+      REACT_APP_WP_API: https://wp.demoapp.digital/wp-json
+      REACT_APP_WP_STYLES: https://wp.demoapp.digital/wp-admin/load-styles.php?c=1&dir=ltr&load%5Bchunk_0%5D=dashicons,admin-bar,buttons,media-views,editor-buttons,wp-components,wp-block-editor,wp-nux,wp-editor,wp-block-library,wp-block-&load%5Bchunk_1%5D=library-theme,wp-edit-blocks,wp-edit-post,wp-format-library,wp-block-directory,common,forms,admin-menu,dashboard,list-tables,edi&load%5Bchunk_2%5D=t,revisions,media,themes,about,nav-menus,wp-pointer,widgets,site-icon,l10n,wp-auth-check&ver=5.5.6' id='wp-block-library-css
+      REACT_APP_PREVALENCE_API: https://admin.demoapp.digital
+      REACT_APP_POLICY_API: https://admin.demoapp.digital
+      REACT_APP_UTIL_API: https://admin.demoapp.digital
+      REACT_APP_GA_CODE: ""
+      REACT_APP_WP_HOSTS: localhost,wp.localhost,wp.staging.site,wp.demoapp.digital
+      REACT_APP_USE_HASH_LINKS: true
+      EMBEDDABLE_URI: https://ui.demoapp.digital/#/en/embeddable
+      BLOCKS_CATEGORY: wp-react-lib-blocks
+      BLOCKS_NS: wp-react-lib-components
+    steps:
+      - name: Check Out Repo 
+        uses: actions/checkout@v2
+      
+      - name: Setup NodeJS
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+          cache: 'npm'
+      
+      - name: Setup wp-react-lib
+        working-directory: ./wp-react-lib
+        run: |
+          npm install
+          npm run dist
+      
+      - name: Setup wp-react-example-advanced
+        working-directory: ./wp-react-example-advanced
+        run: |
+          npm install
+          npm run build
+      
+      - name: Setup wp-react-blocks-plugin
+        working-directory: ./wp-react-blocks-plugin/blocks
+        run: |
+          npm install
+          npm run build
+      
+      - name: Copy files
+        run: |
+          mkdir -p /opt/wp-react-lib
+          cp -r wp-content /opt/wp-react-lib/wp-content
+          cp -r wp-react-blocks-plugin /opt/wp-react-lib/wp-content/plugins/wp-react-blocks-plugin
+          cp -r wp-theme /opt/wp-react-lib/wp-content/themes/wp-react-theme
+          cp -r wp-react-example-advanced /opt/wp-react-lib/wp-react-example-advanced
+          echo "FROM nginx:alpine" > /opt/wp-react-lib/Dockerfile
+          echo "WORKDIR /opt/wp-react-lib" >> /opt/wp-react-lib/Dockerfile
+          echo "COPY ./ ./" >> /opt/wp-react-lib/Dockerfile
+          echo "COPY ./wp-react-example-advanced/build /usr/share/nginx/html" >> /opt/wp-react-lib/Dockerfile
+          echo "VOLUME /opt/wp-react-lib" >> /opt/wp-react-lib/Dockerfile
+      
+      - name: Login to Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: /opt/wp-react-lib
+          push: true
+          tags: |
+            ghcr.io/ejimba/wp-react-lib:${{ github.sha }}
+            ghcr.io/ejimba/wp-react-lib:latest
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Setup kubectl 
+        uses: azure/setup-kubectl@v1
+      
+      - name: Setup context
+        run: |
+          kubectl config set-cluster k8s --server=${{ secrets.K8S_PRODUCTION_URI }} --insecure-skip-tls-verify=true
+          kubectl config set-credentials ${{ secrets.K8S_PRODUCTION_USER }} --token=${{ secrets.K8S_PRODUCTION_TOKEN }}
+          kubectl config set-context default --cluster=k8s --user=${{ secrets.K8S_PRODUCTION_USER }} --namespace=${{ secrets.K8S_PRODUCTION_NAMESPACE }}
+          kubectl config use-context default
+      
+      - name: Patch images
+        run: |
+          kubectl set image deployment/wp-demoapp-digital-app-deploy wp-demoapp-digital-app=ghcr.io/ejimba/wp-react-lib:${{ github.sha }} --record
+          kubectl set image deployment/ui-demoapp-digital-deploy ui-demoapp-digital=ghcr.io/ejimba/wp-react-lib:${{ github.sha }} --record
