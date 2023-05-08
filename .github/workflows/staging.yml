@@ -26,26 +26,22 @@ jobs:
       - name: Check Out Repo 
         uses: actions/checkout@v3
       
-      - name: Setup NodeJS
+      - name: Setup wp-react-lib
+        working-directory: ./wp-react-lib
         uses: actions/setup-node@v3
         with:
           node-version: 16
           cache: 'npm'
-      
-      - name: Setup wp-react-lib
-        working-directory: ./wp-react-lib
         run: |
           npm install
           npm run dist
       
       - name: Setup wp-react-example-advanced
-        working-directory: ./wp-react-example-advanced
-        run: |
-          npm install
-          npm run build
-      
-      - name: Setup wp-react-blocks-plugin
-        working-directory: ./wp-react-blocks-plugin/blocks
+        working-directory: ./examples/wp-react-example-advanced
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: 'npm'
         run: |
           npm install
           npm run build
@@ -53,14 +49,11 @@ jobs:
       - name: Copy files
         run: |
           mkdir -p /opt/wp-react-lib
-          cp -r wp-content /opt/wp-react-lib/wp-content
-          cp -r wp-react-blocks-plugin /opt/wp-react-lib/wp-content/plugins/wp-react-blocks-plugin
-          cp -r wp-theme /opt/wp-react-lib/wp-content/themes/wp-react-theme
-          cp -r wp-react-example-advanced /opt/wp-react-lib/wp-react-example-advanced
+          cp -r examples/wp-react-example-advanced /opt/wp-react-lib/wp-react-example-advanced
           echo "FROM nginx:alpine" > /opt/wp-react-lib/Dockerfile
           echo "WORKDIR /opt/wp-react-lib" >> /opt/wp-react-lib/Dockerfile
           echo "COPY ./ ./" >> /opt/wp-react-lib/Dockerfile
-          echo "COPY ./wp-react-example-advanced/build /usr/share/nginx/html" >> /opt/wp-react-lib/Dockerfile
+          echo "COPY ./examples/wp-react-example-advanced/build /usr/share/nginx/html" >> /opt/wp-react-lib/Dockerfile
           echo "VOLUME /opt/wp-react-lib" >> /opt/wp-react-lib/Dockerfile
       
       - name: Login to Container Registry
