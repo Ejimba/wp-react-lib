@@ -18,6 +18,9 @@ import {
     LOAD_SEARCH,
     LOAD_SEARCH_DONE,
     LOAD_SEARCH_ERROR,
+    LOAD_SETTINGS,
+    LOAD_SETTINGS_DONE,
+    LOAD_SETTINGS_ERROR,
     LOAD_TAXONOMY,
     LOAD_TAXONOMY_DONE,
     LOAD_TAXONOMY_ERROR
@@ -90,7 +93,6 @@ export const getPosts = ({
                 before,
                 perPage,
                 page,
-                meta,
                 fields,
                 store,
                 locale,
@@ -127,7 +129,6 @@ export const search = ({context, page, perPage, search, type, subtype, store, lo
     wp.search(context, page, perPage, search, type, subtype, locale)
         .then(response => {
             const {data, meta} = response
-
             dispatch({type: LOAD_SEARCH_DONE, store, data, meta})
         })
         .catch(error => {
@@ -199,7 +200,18 @@ export const getMenu = ({slug, locale = "en"}) => (dispatch, getState) => {
     })
 }
 
-export const getMedia = (id, locale = "en") => (dispatch, getState) => {
+
+export const getSettings = ({locale = "en",changeUUID=null}) => (dispatch, getState) => {
+    dispatch({type: LOAD_SETTINGS})
+    wp.getSettings(locale,changeUUID).then(response => {
+        const {data, meta} = response
+        dispatch({type: LOAD_SETTINGS_DONE, data, meta})
+    }).catch(error => {
+        dispatch({type: LOAD_SETTINGS_ERROR, error})
+    })
+}
+
+export const getMedia = ({id, locale = "en"}) => (dispatch, getState) => {
     dispatch({type: LOAD_MEDIA, id})
     wp.getMedia(id, locale).then(response => {
         const {data, meta} = response
